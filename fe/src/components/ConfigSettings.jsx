@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, RotateCcw, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { DEFAULT_CONFIG } from '../lib/storage';
+import { reBalance, normalizeToHundred } from '../lib/weightBalancer';
+
 
 export default function ConfigSettings({ config, onSaveConfig }) {
   const [localConfig, setLocalConfig] = useState({ ...config });
@@ -29,13 +31,28 @@ export default function ConfigSettings({ config, onSaveConfig }) {
   };
 
   const handleWeightChange = (key, value) => {
-    setLocalConfig(prev => ({
-      ...prev,
-      weights: {
-        ...prev.weights,
-        [key]: Number(value) / 100
-      }
-    }));
+    setLocalConfig(prev => {
+      const balancedWeights = reBalance(prev.weights, key, Number(value) / 100);
+      return {
+        ...prev,
+        weights: balancedWeights
+      };
+    });
+  };
+
+  const handleEqualWeights = () => {
+    setLocalConfig(prev => {
+      const keys = Object.keys(prev.weights || {});
+      const equalVal = 1 / keys.length;
+      const equalWeights = {};
+      keys.forEach(k => {
+        equalWeights[k] = equalVal;
+      });
+      return {
+        ...prev,
+        weights: normalizeToHundred(equalWeights)
+      };
+    });
   };
 
   const resetToDefault = () => {
@@ -66,7 +83,8 @@ export default function ConfigSettings({ config, onSaveConfig }) {
     tienIch: 'Tiện ích & Môi trường',
     dienTich: 'Diện tích sử dụng',
     camQuan: 'Cảm quan thực tế',
-    doThoang: 'Độ thoáng & Thiết bị'
+    doThoang: 'Độ thoáng & Thiết bị',
+    phuHopCaNhan: 'Phù hợp cá nhân (Yêu cầu)'
   };
 
   return (
@@ -77,7 +95,7 @@ export default function ConfigSettings({ config, onSaveConfig }) {
         </div>
         <div>
           <h2 className="text-xl md:text-2xl font-bold font-sans">Cấu Hình Trọng Số & Ngưỡng Điểm</h2>
-          <p className="text-slate-400 text-sm mt-0.5">Tùy biến tiêu chí để phù hợp với ưu tiên tìm phòng của riêng bạn</p>
+          <p className="text-slate-400 text-sm mt-0.5">Tùy biến trọng số của 7 tiêu chí đánh giá phòng trọ</p>
         </div>
       </div>
 
@@ -85,7 +103,7 @@ export default function ConfigSettings({ config, onSaveConfig }) {
         {/* Hạn mức & Ngưỡng cơ bản */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-slate-300">Ngân sách giá thuê mong muốn (VND)</label>
+            <label className="text-sm font-semibold text-slate-300">Ngân sách giá thuê mặc định (VND)</label>
             <input
               type="number"
               value={localConfig.nganSachGiaThue || ''}
@@ -94,11 +112,11 @@ export default function ConfigSettings({ config, onSaveConfig }) {
               placeholder="VD: 4000000"
               required
             />
-            <p className="text-xs text-slate-500">Mức tiền trọ lý tưởng để đối chiếu điểm Chi phí</p>
+            <p className="text-xs text-slate-500">Dùng khi chưa điền thu nhập ở Hồ sơ cá nhân</p>
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-semibold text-slate-300">Thời gian đi làm lý tưởng (phút)</label>
+            <label className="text-sm font-semibold text-slate-300">Thời gian đi làm mặc định (phút)</label>
             <input
               type="number"
               value={localConfig.thoiGianLyTuong || ''}
@@ -107,7 +125,7 @@ export default function ConfigSettings({ config, onSaveConfig }) {
               placeholder="VD: 20"
               required
             />
-            <p className="text-xs text-slate-500">Thời gian di chuyển tối đa tới văn phòng/công ty</p>
+            <p className="text-xs text-slate-500">Neo so sánh cho điểm Vị trí</p>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -131,14 +149,14 @@ export default function ConfigSettings({ config, onSaveConfig }) {
                 required
               />
             </div>
-            <p className="text-xs text-slate-500">Dải diện tích từ Nhỏ đến Rộng rãi</p>
+            <p className="text-xs text-slate-500">Khoảng diện tích từ Nhỏ đến Rộng rãi</p>
           </div>
         </div>
 
         {/* Thiết lập Trọng số */}
         <div>
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-indigo-400">Trọng số các trục (%)</h3>
+            <h3 className="text-lg font-bold text-indigo-400">Trọng số 7 trục (%)</h3>
             <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${isWeightValid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
               {!isWeightValid && <AlertTriangle className="w-3.5 h-3.5" />}
               {isWeightValid && <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -178,14 +196,23 @@ export default function ConfigSettings({ config, onSaveConfig }) {
 
         {/* Hành động */}
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-slate-900">
-          <button
-            type="button"
-            onClick={resetToDefault}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/40 text-slate-400 hover:text-slate-300 text-sm font-medium transition-all"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Khôi phục mặc định
-          </button>
+          <div className="flex flex-wrap gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={resetToDefault}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/40 text-slate-400 hover:text-slate-300 text-xs font-semibold transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Mặc định gợi ý
+            </button>
+            <button
+              type="button"
+              onClick={handleEqualWeights}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-800 hover:border-slate-700 hover:bg-slate-900/40 text-slate-400 hover:text-slate-300 text-xs font-semibold transition-all"
+            >
+              ⚖️ Chia đều các trục
+            </button>
+          </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {saveSuccess && (

@@ -1,4 +1,4 @@
-export const calculateAxisScores = (room, config) => {
+export const calculateAxisScores = (room, config, profile = null) => {
   const {
     nganSachGiaThue = 4000000,
     thoiGianLyTuong = 20,
@@ -15,13 +15,12 @@ export const calculateAxisScores = (room, config) => {
   else viTriScore = 2;
 
   // 2. Chi phí (Cost Score)
-  // Ước tính chi phí điện nước hàng tháng nếu người dùng nhập đơn giá điện (VD: 3.5k/kWh) hoặc nước (VD: 20k/khối)
   const estDien = Number(room.chiPhiKhac?.dien || 0) < 10000 
-    ? Number(room.chiPhiKhac?.dien || 0) * 100  // Giả định dùng ~100 kWh/tháng
+    ? Number(room.chiPhiKhac?.dien || 0) * 100  // Giả định 100 kWh
     : Number(room.chiPhiKhac?.dien || 0);
     
   const estNuoc = Number(room.chiPhiKhac?.nuoc || 0) < 5000 
-    ? Number(room.chiPhiKhac?.nuoc || 0) * 10   // Giả định dùng ~10 khối/tháng hoặc 100k/người
+    ? Number(room.chiPhiKhac?.nuoc || 0) * 10   // Giả định 10 khối
     : Number(room.chiPhiKhac?.nuoc || 0);
 
   const tongChiPhi = Number(room.giaThue || 0) +
@@ -31,9 +30,13 @@ export const calculateAxisScores = (room, config) => {
     Number(room.chiPhiKhac?.dichVu || 0) +
     Number(room.chiPhiKhac?.wifi || 0);
 
-  // Ngưỡng thấp (chi phí tối ưu) và Ngưỡng cao (chi phí trần)
-  const nguongThap = nganSachGiaThue * 0.7; // Ví dụ ngân sách 4tr thì thấp hơn 2.8tr được 10 điểm
-  const nguongCao = nganSachGiaThue * 1.5;  // Ngưỡng trần chi phí tối đa (6tr)
+  // So sánh với ngân sách của cấu hình (hoặc từ profile nếu có)
+  const targetBudget = profile?.thuNhap 
+    ? (Number(profile.thuNhap) * (profile.percentNganSach || 30) / 100)
+    : nganSachGiaThue;
+
+  const nguongThap = targetBudget * 0.7; 
+  const nguongCao = targetBudget * 1.5;  
   
   let chiPhiScore = 1;
   if (tongChiPhi <= nguongThap) {
@@ -41,7 +44,6 @@ export const calculateAxisScores = (room, config) => {
   } else if (tongChiPhi >= nguongCao) {
     chiPhiScore = 1;
   } else {
-    // Nội suy tuyến tính từ 10 xuống 1
     const rawScore = 10 - ((tongChiPhi - nguongThap) / (nguongCao - nguongThap)) * 9;
     chiPhiScore = Math.round(rawScore * 10) / 10;
   }
@@ -64,20 +66,18 @@ export const calculateAxisScores = (room, config) => {
     } else if (m2 >= maxM2) {
       dienTichScore = 10;
     } else {
-      // Nội suy từ 3 đến 10
       const rawScore = 3 + ((m2 - minM2) / (maxM2 - minM2)) * 7;
       dienTichScore = Math.round(rawScore * 10) / 10;
     }
   } else {
-    // Nếu không nhập m2 thì quy đổi theo doRong (nho, vua, lon)
     if (room.doRong === 'lon') dienTichScore = 10;
     else if (room.doRong === 'vua') dienTichScore = 7;
     else if (room.doRong === 'nho') dienTichScore = 4;
   }
 
   // 5. Cảm quan (Aesthetic Score)
-  const camQuanInput = Number(room.diemCamQuan || 3); // mặc định 3 nếu không chọn
-  const camQuanScore = camQuanInput * 2; // thang 1-5 nhân đôi thành 2-10
+  const camQuanInput = Number(room.diemCamQuan || 3);
+  const camQuanScore = camQuanInput * 2;
 
   // 6. Độ thoáng (Ventilation Score)
   let checkCount = 0;
@@ -85,7 +85,41 @@ export const calculateAxisScores = (room, config) => {
   if (room.doThoang?.banCong) checkCount++;
   if (room.doThoang?.cuaSoTroi) checkCount++;
   if (room.doThoang?.cuaSo) checkCount++;
-  const doThoangScore = checkCount * 2.5; // tối đa 10đ
+  const doThoangScore = checkCount * 2.5;
+
+  // 7. Phù hợp cá nhân (Personal Match Score) - Trục mới
+  const mandatoryTags = profile?.mandatoryTags || [];
+  const optionalTags = profile?.optionalTags || [];
+  const roomTags = room.tags || [];
+
+  const missingMandatory = mandatoryTags.filter(t => !roomTags.includes(t));
+  const matchedOptional = optionalTags.filter(t => roomTags.includes(t));
+
+  let phuHopScore = 10;
+  if (mandatoryTags.length > 0) {
+    if (missingMandatory.length > 0) {
+      // Phạt nặng: Trừ 3.5 điểm cho mỗi yêu cầu bắt buộc bị thiếu
+      phuHopScore = Math.max(1, 10 - missingMandatory.length * 3.5);
+    } else {
+      // Nếu đáp ứng đủ bắt buộc, tính thêm điểm cộng từ tùy chọn
+      if (optionalTags.length > 0) {
+        const ratio = matchedOptional.length / optionalTags.length;
+        phuHopScore = 6 + ratio * 4; // Bắt đầu từ 6.0đ, tối đa 10đ
+      } else {
+        phuHopScore = 10;
+      }
+    }
+  } else {
+    // Nếu không có yêu cầu bắt buộc, tính dựa trên yêu cầu tùy chọn
+    if (optionalTags.length > 0) {
+      const ratio = matchedOptional.length / optionalTags.length;
+      phuHopScore = 5 + ratio * 5; // Bắt đầu từ 5.0đ, tối đa 10đ
+    } else {
+      phuHopScore = 10; // Không yêu cầu gì = 10đ
+    }
+  }
+
+  phuHopScore = Math.round(phuHopScore * 10) / 10;
 
   return {
     viTri: viTriScore,
@@ -94,42 +128,105 @@ export const calculateAxisScores = (room, config) => {
     dienTich: dienTichScore,
     camQuan: camQuanScore,
     doThoang: doThoangScore,
-    _tongChiPhi: tongChiPhi // Trả thêm tổng chi phí thô để tiện hiển thị
+    phuHopCaNhan: phuHopScore,
+    _tongChiPhi: tongChiPhi,
+    _thieuBatBuoc: missingMandatory.length > 0,
+    _danhSachThieuBatBuoc: missingMandatory
   };
 };
 
 export const calculateTotalScore = (axisScores, config) => {
   const weights = config.weights || {
-    viTri: 0.20,
-    chiPhi: 0.25,
+    viTri: 0.15,
+    chiPhi: 0.20,
     tienIch: 0.15,
     dienTich: 0.15,
     camQuan: 0.15,
-    doThoang: 0.10
+    doThoang: 0.10,
+    phuHopCaNhan: 0.10
   };
 
-  const score = (axisScores.viTri * weights.viTri) +
-    (axisScores.chiPhi * weights.chiPhi) +
-    (axisScores.tienIch * weights.tienIch) +
-    (axisScores.dienTich * weights.dienTich) +
-    (axisScores.camQuan * weights.camQuan) +
-    (axisScores.doThoang * weights.doThoang);
+  const score = (axisScores.viTri * (weights.viTri ?? 0.15)) +
+    (axisScores.chiPhi * (weights.chiPhi ?? 0.20)) +
+    (axisScores.tienIch * (weights.tienIch ?? 0.15)) +
+    (axisScores.dienTich * (weights.dienTich ?? 0.15)) +
+    (axisScores.camQuan * (weights.camQuan ?? 0.15)) +
+    (axisScores.doThoang * (weights.doThoang ?? 0.10)) +
+    (axisScores.phuHopCaNhan * (weights.phuHopCaNhan ?? 0.10));
 
   return Math.round(score * 10) / 10;
 };
 
-// Hàm đầy đủ nhận vào đối tượng phòng và trả về đối tượng phòng đã được chấm điểm hoàn chỉnh
-export const scoreRoom = (room, config) => {
-  const diemTheoTruc = calculateAxisScores(room, config);
-  const diemTong = calculateTotalScore(diemTheoTruc, config);
+export const scoreRoom = (room, config, profile = null) => {
+  const scores = calculateAxisScores(room, config, profile);
   
-  // Trích xuất tổng chi phí thô và loại bỏ nó khỏi trường diemTheoTruc
-  const { _tongChiPhi, ...pureAxisScores } = diemTheoTruc;
+  const { 
+    _tongChiPhi, 
+    _thieuBatBuoc, 
+    _danhSachThieuBatBuoc, 
+    ...pureAxisScores 
+  } = scores;
 
+  const diemTong = calculateTotalScore(pureAxisScores, config);
+  
   return {
     ...room,
     diemTong,
     diemTheoTruc: pureAxisScores,
-    tongChiPhiTho: _tongChiPhi
+    tongChiPhiTho: _tongChiPhi,
+    thieuBatBuoc: _thieuBatBuoc,
+    danhSachThieuBatBuoc: _danhSachThieuBatBuoc
   };
+};
+
+export const analyzeSensitivity = (roomsList, config, profile) => {
+  if (!roomsList || roomsList.length <= 1) return { isSensitive: false, changedBestRoomName: null };
+  
+  // Sắp xếp danh sách gốc
+  const sortedOriginal = [...roomsList].sort((a, b) => b.diemTong - a.diemTong);
+  const originalBest = sortedOriginal[0];
+  
+  const keys = Object.keys(config.weights || {});
+  let isSensitive = false;
+  let changedBestRoomName = null;
+  
+  for (const key of keys) {
+    const keyVal = config.weights[key] || 0;
+    const delta = 0.10; // Thay đổi trọng số +/- 10%
+    
+    if (keyVal + delta > 1.0) continue;
+    
+    const plusWeights = {};
+    const otherKeys = keys.filter(k => k !== key);
+    const otherSum = otherKeys.reduce((s, k) => s + (config.weights[k] || 0), 0);
+    
+    plusWeights[key] = keyVal + delta;
+    otherKeys.forEach(k => {
+      if (otherSum === 0) {
+        plusWeights[k] = 0;
+      } else {
+        plusWeights[k] = Math.max(0, (config.weights[k] || 0) - delta * ((config.weights[k] || 0) / otherSum));
+      }
+    });
+    
+    // Tính lại điểm tổng hợp cho tất cả các phòng với trọng số mới
+    const perturbedRooms = roomsList.map(r => {
+      const scoreMap = r.diemTheoTruc || {};
+      let diemTong = 0;
+      Object.entries(plusWeights).forEach(([axis, weight]) => {
+        diemTong += (scoreMap[axis] || 0) * weight;
+      });
+      return { name: r.ten, diemTong: Number(diemTong.toFixed(1)) };
+    });
+    
+    perturbedRooms.sort((a, b) => b.diemTong - a.diemTong);
+    
+    if (perturbedRooms[0] && perturbedRooms[0].name !== originalBest.ten) {
+      isSensitive = true;
+      changedBestRoomName = perturbedRooms[0].name;
+      break;
+    }
+  }
+  
+  return { isSensitive, changedBestRoomName };
 };

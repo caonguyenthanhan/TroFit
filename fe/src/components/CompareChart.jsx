@@ -25,7 +25,8 @@ const axisKeys = {
   tienIch: 'Tiện ích',
   dienTich: 'Diện tích',
   camQuan: 'Cảm quan',
-  doThoang: 'Độ thoáng'
+  doThoang: 'Độ thoáng',
+  phuHopCaNhan: 'Phù hợp cá nhân' // Trục thứ 7
 };
 
 export default function CompareChart({ selectedRooms }) {
@@ -38,7 +39,6 @@ export default function CompareChart({ selectedRooms }) {
   }
 
   // Format dữ liệu cho Recharts RadarChart
-  // Cấu trúc mong muốn: [{ subject: 'Vị trí', 'Phòng A': 8, 'Phòng B': 7 }, ...]
   const chartData = Object.entries(axisKeys).map(([key, label]) => {
     const dataPoint = { subject: label };
     selectedRooms.forEach((room) => {
@@ -58,7 +58,7 @@ export default function CompareChart({ selectedRooms }) {
               <div key={index} className="flex items-center gap-4 text-xs">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }}></span>
                 <span className="text-slate-400 font-medium truncate max-w-[120px]">{p.name}:</span>
-                <span className="font-bold text-slate-100 ml-auto">{p.value} đ</span>
+                <span className="font-bold text-slate-100 ml-auto">{p.value} / 10đ</span>
               </div>
             ))}
           </div>
@@ -71,9 +71,9 @@ export default function CompareChart({ selectedRooms }) {
   return (
     <div className="glass-panel p-6 w-full h-[400px] flex items-center justify-center">
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
+        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
           <PolarGrid stroke="#334155" />
-          <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }} />
+          <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }} />
           <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{ fill: '#64748b' }} axisLine={false} />
           
           {selectedRooms.map((room, index) => {
@@ -91,7 +91,7 @@ export default function CompareChart({ selectedRooms }) {
             );
           })}
           <Tooltip content={<CustomTooltip />} />
-          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+          <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
         </RadarChart>
       </ResponsiveContainer>
     </div>

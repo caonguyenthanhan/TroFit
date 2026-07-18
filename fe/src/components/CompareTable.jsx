@@ -1,10 +1,21 @@
 import React from 'react';
-import { Calendar, MapPin, Check, X, ShieldAlert } from 'lucide-react';
+import { Calendar, MapPin, Check, X, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { getTags } from '../lib/tags';
 
-export default function CompareTable({ selectedRooms }) {
+export default function CompareTable({ selectedRooms, profile }) {
   if (!selectedRooms || selectedRooms.length === 0) {
     return null;
   }
+
+  const calculateTimeCost = (commuteTime) => {
+    const income = Number(profile?.thuNhap || 0);
+    if (!commuteTime || !income) return 0;
+    // (minutes / 60) * (income / 176) * 22 days * 2 trips
+    return (Number(commuteTime) / 60) * (income / 176) * 22 * 2;
+  };
+
+  const allAvailableTags = getTags();
+  const getTagName = (id) => allAvailableTags.find(t => t.id === id)?.label || id;
 
   const formatCost = (val) => {
     if (val === undefined || val === null || val === '') return '-';
@@ -76,6 +87,31 @@ export default function CompareTable({ selectedRooms }) {
               ))}
             </tr>
 
+            {/* Phù hợp cá nhân */}
+            <tr className="bg-slate-900/40">
+              <td className="p-3 text-slate-300 font-medium">Điểm Phù hợp cá nhân</td>
+              {selectedRooms.map((room) => {
+                const score = room.diemTheoTruc?.phuHopCaNhan || 0;
+                let scoreColor = 'text-emerald-400';
+                if (score < 5) scoreColor = 'text-rose-400 font-bold';
+                else if (score < 8) scoreColor = 'text-amber-400';
+
+                return (
+                  <td key={room.id} className="p-3">
+                    <div className="space-y-1">
+                      <span className={`font-bold ${scoreColor}`}>{score} / 10đ</span>
+                      {room.thieuBatBuoc && (
+                        <div className="text-[10px] text-rose-400 font-semibold flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          Thiếu: {room.danhSachThieuBatBuoc.map(getTagName).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+
             {/* Giá thuê */}
             <tr className="hover:bg-slate-900/20">
               <td className="p-3 text-slate-400">Giá thuê (tháng)</td>
@@ -95,6 +131,47 @@ export default function CompareTable({ selectedRooms }) {
                 </td>
               ))}
             </tr>
+
+            {/* Chi phí cơ hội thời gian di chuyển */}
+            {profile?.thuNhap > 0 && (
+              <tr className="hover:bg-slate-900/20">
+                <td className="p-3 text-slate-400">
+                  <span className="flex flex-col">
+                    <span>CP cơ hội thời gian đi lại</span>
+                    <span className="text-[9px] text-slate-500 font-normal">CP cơ hội = (Phút / 60) * (Thu nhập / 176) * 22 ngày * 2 lượt</span>
+                  </span>
+                </td>
+                {selectedRooms.map((room) => {
+                  const timeCost = calculateTimeCost(room.thoiGianDenCongTy);
+                  return (
+                    <td key={room.id} className="p-3 text-slate-300">
+                      <div className="font-semibold text-slate-400">
+                        {formatCost(Math.round(timeCost))}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        ({room.thoiGianDenCongTy || 0} phút đi lại)
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
+
+            {/* Tổng chi phí quy đổi */}
+            {profile?.thuNhap > 0 && (
+              <tr className="hover:bg-slate-900/20 bg-indigo-500/5">
+                <td className="p-3 text-indigo-300 font-semibold">Tổng chi phí quy đổi (Trọ + CP Thời gian)</td>
+                {selectedRooms.map((room) => {
+                  const timeCost = calculateTimeCost(room.thoiGianDenCongTy);
+                  const totalConvertedCost = room.tongChiPhiTho + timeCost;
+                  return (
+                    <td key={room.id} className="p-3 font-extrabold text-indigo-300 text-sm">
+                      {formatCost(Math.round(totalConvertedCost))}
+                    </td>
+                  );
+                })}
+              </tr>
+            )}
 
             {/* Phụ phí chi tiết */}
             <tr className="hover:bg-slate-900/20">
@@ -152,7 +229,7 @@ export default function CompareTable({ selectedRooms }) {
               ))}
             </tr>
 
-            {/* Ti tiện ích */}
+            {/* Tiện ích xung quanh */}
             <tr className="hover:bg-slate-900/20">
               <td className="p-3 text-slate-400">Tiện ích xung quanh</td>
               {selectedRooms.map((room) => (
@@ -205,6 +282,26 @@ export default function CompareTable({ selectedRooms }) {
               {selectedRooms.map((room) => (
                 <td key={room.id} className="p-3">
                   {getYesNoIcon(room.doThoang?.cuaSoTroi)}
+                </td>
+              ))}
+            </tr>
+
+            {/* Bộ Tag tiện ích đầy đủ */}
+            <tr className="hover:bg-slate-900/20">
+              <td className="p-3 text-slate-400">Đặc điểm / Tiện nghi khác</td>
+              {selectedRooms.map((room) => (
+                <td key={room.id} className="p-3">
+                  <div className="flex flex-wrap gap-1 max-w-[200px]">
+                    {room.tags && room.tags.length > 0 ? (
+                      room.tags.map((t) => (
+                        <span key={t} className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">
+                          {getTagName(t)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-500 italic text-xs">Không có tiện nghi</span>
+                    )}
+                  </div>
                 </td>
               ))}
             </tr>

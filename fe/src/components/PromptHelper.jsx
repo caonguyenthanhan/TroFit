@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Copy, Check, MessageSquare, Terminal } from 'lucide-react';
-import { exportData } from '../lib/storage';
+import { exportData, getProfile } from '../lib/storage';
+import { getTags } from '../lib/tags';
 
 export default function PromptHelper({ selectedRooms, config }) {
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedData, setCopiedData] = useState(false);
+  const [profile, setProfile] = useState(null);
 
-  // Lấy dữ liệu dạng JSON cho các phòng được chọn (hoặc tất cả nếu không chọn)
+  useEffect(() => {
+    setProfile(getProfile());
+  }, []);
+
   const getExportJson = () => {
     const data = exportData();
     if (selectedRooms && selectedRooms.length > 0) {
-      // Chỉ xuất các phòng được chọn để phân tích sâu
       return JSON.stringify({
         exportedAt: data.exportedAt,
         config: data.config,
+        profile: data.profile,
         danhSachPhong: selectedRooms
       }, null, 2);
     }
@@ -21,6 +26,10 @@ export default function PromptHelper({ selectedRooms, config }) {
   };
 
   const getSystemPrompt = () => {
+    const prof = profile || { thuNhap: 0, mandatoryTags: [], optionalTags: [] };
+    const allAvailableTags = getTags();
+    const getTagName = (id) => allAvailableTags.find(t => t.id === id)?.label || id;
+
     const weightsText = Object.entries(config.weights || {})
       .map(([key, val]) => {
         const labels = {
@@ -29,25 +38,36 @@ export default function PromptHelper({ selectedRooms, config }) {
           tienIch: 'Tiện ích xung quanh',
           dienTich: 'Diện tích',
           camQuan: 'Cảm quan thực tế',
-          doThoang: 'Độ thoáng & Thiết bị'
+          doThoang: 'Độ thoáng & Thiết bị',
+          phuHopCaNhan: 'Phù hợp cá nhân (Đáp ứng tag)'
         };
-        return `- ${labels[key]}: ${Math.round(val * 100)}%`;
+        return `- ${labels[key] || key}: ${Math.round(val * 100)}%`;
       })
       .join('\n');
 
-    return `Đây là dữ liệu các phòng trọ tôi đã đi khảo sát thực tế (dữ liệu JSON đính kèm ở dưới).
-Hãy phân tích ưu/nhược điểm chi tiết của từng phòng dựa trên các thông số kỹ thuật và cảm quan thực tế mà tôi đã ghi chép.
+    const mandatoryText = prof.mandatoryTags.length > 0 
+      ? prof.mandatoryTags.map(getTagName).join(', ') 
+      : 'Không có';
+    const optionalText = prof.optionalTags.length > 0 
+      ? prof.optionalTags.map(getTagName).join(', ') 
+      : 'Không có';
 
-Mục tiêu của tôi là tìm được phòng phù hợp nhất với các điều kiện sau:
-- Ngân sách thuê lý tưởng: ${(config.nganSachGiaThue || 4000000).toLocaleString()}đ/tháng
-- Thời gian đi làm/đi học lý tưởng: ${config.thoiGianLyTuong || 20} phút
+    return `Đây là dữ liệu các phòng trọ tôi đã đi khảo sát thực tế (dữ liệu JSON đính kèm ở dưới).
+Hãy phân tích ưu/nhược điểm chi tiết của từng phòng dựa trên các thông số thực tế và cảm quan mà tôi đã ghi chép.
+
+Mục tiêu của tôi là tìm phòng phù hợp nhất dựa trên hồ sơ cá nhân sau:
+- Thu nhập hàng tháng: ${(prof.thuNhap || 0).toLocaleString()}đ/tháng
+- Ngân sách trọ tối ưu: ${(prof.thuNhap * (prof.percentNganSach || 30) / 100).toLocaleString()}đ/tháng (chiếm ${prof.percentNganSach || 30}% thu nhập)
+- Thời gian đi làm lý tưởng: ${prof.thoiGianDenCongTy || 20} phút
 - Trọng số độ ưu tiên cá nhân:
 ${weightsText}
+- Yêu cầu BẮT BUỘC: ${mandatoryText}
+- Yêu cầu TÙY CHỌN: ${optionalText}
 
 Nhiệm vụ của bạn (AI):
-1. Đánh giá chi tiết ưu điểm, nhược điểm nổi bật của từng phòng (đặc biệt lưu ý các phụ phí đi kèm và độ thoáng/cảm quan thực tế).
+1. Đánh giá chi tiết ưu điểm, nhược điểm nổi bật của từng phòng (đặc biệt lưu ý về chi phí trọn gói, khoảng cách đi làm, và các yêu cầu bắt buộc có bị thiếu hay không).
 2. Xếp hạng thứ tự ưu tiên các phòng từ tốt nhất đến kém nhất.
-3. Đưa ra lời khuyên hoặc gợi ý đàm phán với chủ nhà đối với phòng tốt nhất (ví dụ: đàm phán tiền cọc, hỏi thêm về tiền xe/điện...).
+3. Đưa ra lời khuyên đàm phán hoặc đặt câu hỏi thêm cho chủ nhà đối với phòng tốt nhất để tối ưu chi phí hoặc thỏa thuận cọc.
 
 Dữ liệu khảo sát phòng trọ dạng JSON:
 \`\`\`json
@@ -84,10 +104,10 @@ ${getExportJson()}
         {/* Hướng dẫn & Copy Prompt */}
         <div className="space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
-            <h4 className="text-sm font-semibold text-slate-200">1. Prompt Phân Tích & Tư Vấn Chuyên Sâu</h4>
+            <h4 className="text-sm font-semibold text-slate-200">1. Prompt Phân Tích Kèm Hồ Sơ Tài Chính</h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Prompt mẫu này đã chứa sẵn các cấu hình trọng số ưu tiên của bạn và danh sách phòng trọ bạn đã chọn để so sánh. 
-              Bạn chỉ cần sao chép và dán trực tiếp vào các ô chat của AI để nhận đánh giá khách quan.
+              Prompt mẫu này đã chứa sẵn thông tin thu nhập, các yêu cầu bắt buộc/tùy chọn của bạn và danh sách phòng trọ bạn đã khảo sát.
+              Dán trực tiếp vào ô chat của AI để nhận tư vấn chuyên sâu.
             </p>
           </div>
 
@@ -102,8 +122,8 @@ ${getExportJson()}
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4" />
-                Sao chép Prompt mẫu + Dữ liệu
+                <MessageSquare className="w-4 h-4" />
+                Sao chép Prompt + Dữ liệu
               </>
             )}
           </button>
@@ -114,8 +134,7 @@ ${getExportJson()}
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-slate-200">2. Xuất Dữ Liệu Dạng JSON Thô</h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Nếu bạn chỉ muốn lấy dữ liệu thô JSON để tích hợp hoặc gửi file cho các ứng dụng phân tích dữ liệu chuyên nghiệp khác, 
-              sử dụng nút sao chép JSON bên dưới.
+              Nếu bạn chỉ muốn lấy dữ liệu thô JSON để tải lên trực tiếp làm tệp đính kèm trong các mô hình AI hoặc sử dụng cho mục đích khác.
             </p>
           </div>
 

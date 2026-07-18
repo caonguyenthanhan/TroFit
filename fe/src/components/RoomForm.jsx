@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, HelpCircle, Sparkles, Building, Landmark, Compass, Eye, ShieldCheck, MapPin, Calendar } from 'lucide-react';
+import { PlusCircle, HelpCircle, Sparkles, Building, Landmark, Compass, Eye, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { scoreRoom } from '../lib/scoring';
+import TagSelect from './TagSelect';
+import { getTags } from '../lib/tags';
+import AddressPicker from './AddressPicker';
+import { getTravelTime } from '../lib/directions';
+
 
 const INITIAL_ROOM_STATE = {
   ten: '',
@@ -25,15 +30,20 @@ const INITIAL_ROOM_STATE = {
     cuaSoTroi: false,
     cuaSo: false
   },
+  tags: [], // Tiện ích chi tiết
   ngayXem: new Date().toISOString().split('T')[0]
 };
 
-export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit }) {
+export default function RoomForm({ config, profile, onSaveRoom, editingRoom, onCancelEdit }) {
   const [room, setRoom] = useState({ ...INITIAL_ROOM_STATE });
 
   useEffect(() => {
     if (editingRoom) {
-      setRoom({ ...editingRoom });
+      setRoom({
+        ...INITIAL_ROOM_STATE,
+        ...editingRoom,
+        tags: editingRoom.tags || []
+      });
     } else {
       setRoom({
         ...INITIAL_ROOM_STATE,
@@ -41,6 +51,20 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
       });
     }
   }, [editingRoom]);
+
+  // Tự động tính thời gian di chuyển đi làm khi tọa độ phòng thay đổi
+  useEffect(() => {
+    const fetchTime = async () => {
+      if (room.toaDo && profile?.toaDoCongTy) {
+        const mode = profile.tinhChatCongViec === 'di_bo' ? 'walking' : 'driving';
+        const minutes = await getTravelTime(room.toaDo, profile.toaDoCongTy, mode);
+        if (minutes !== null) {
+          handleChange('thoiGianDenCongTy', minutes);
+        }
+      }
+    };
+    fetchTime();
+  }, [room.toaDo, profile?.toaDoCongTy, profile?.tinhChatCongViec]);
 
   const handleChange = (field, value) => {
     setRoom(prev => ({
@@ -69,8 +93,15 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
     }));
   };
 
-  // Live scoring calculation
-  const scoredRoom = scoreRoom(room, config);
+  const handleTagsChange = (newTags) => {
+    setRoom(prev => ({
+      ...prev,
+      tags: newTags
+    }));
+  };
+
+  // Live scoring calculation (including 7th axis and profile matching)
+  const scoredRoom = scoreRoom(room, config, profile);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -78,22 +109,18 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
       alert('Vui lòng nhập tên hoặc ký hiệu phòng trọ!');
       return;
     }
-    // Set UUID if it doesn't exist
+    if (Number(room.giaThue) <= 0) {
+      alert('Vui lòng nhập giá thuê phòng hợp lệ!');
+      return;
+    }
+
     const roomToSave = {
       ...scoredRoom,
       id: room.id || crypto.randomUUID()
     };
     onSaveRoom(roomToSave);
-    // Reset form if not editing
-    if (!editingRoom) {
-      setRoom({
-        ...INITIAL_ROOM_STATE,
-        ngayXem: new Date().toISOString().split('T')[0]
-      });
-    }
   };
 
-  // Helper to color code total score
   const getScoreColorClass = (score) => {
     if (score >= 8) return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5';
     if (score >= 5) return 'text-amber-400 border-amber-500/30 bg-amber-500/5';
@@ -106,8 +133,13 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
     tienIch: 'Tiện ích',
     dienTich: 'Diện tích',
     camQuan: 'Cảm quan',
-    doThoang: 'Độ thoáng'
+    doThoang: 'Độ thoáng',
+    phuHopCaNhan: 'Phù hợp cá nhân'
   };
+
+  // Lấy danh sách tên hiển thị của các tag bắt buộc bị thiếu
+  const allAvailableTags = getTags();
+  const getTagName = (id) => allAvailableTags.find(t => t.id === id)?.label || id;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -128,6 +160,17 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
             </button>
           )}
         </div>
+
+        {/* Cảnh báo thiếu yêu cầu bắt buộc ngay trong Form */}
+        {scoredRoom.thieuBatBuoc && (
+          <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="space-y-1">
+              <span className="font-bold">Cảnh báo thiếu yêu cầu bắt buộc:</span>
+              <p>Phòng này hiện chưa đáp ứng các tiện nghi: <strong className="underline">{scoredRoom.danhSachThieuBatBuoc.map(getTagName).join(', ')}</strong>. Điểm "Phù hợp cá nhân" bị phạt nặng.</p>
+            </div>
+          </div>
+        )}
 
         {/* Thông tin cơ bản */}
         <div className="space-y-4">
@@ -165,6 +208,14 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
                 placeholder="VD: 123/45 Huỳnh Tấn Phát, Quận 7, TP.HCM"
               />
             </div>
+            <div className="md:col-span-2">
+              <AddressPicker
+                label="Vị trí tọa độ phòng trọ"
+                address={room.diaChi}
+                value={room.toaDo}
+                onChange={(coords) => handleChange('toaDo', coords)}
+              />
+            </div>
           </div>
         </div>
 
@@ -180,7 +231,7 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
                 <span className="group relative cursor-pointer text-slate-500">
                   <HelpCircle className="w-3.5 h-3.5" />
                   <span className="absolute bottom-6 left-1/2 -translate-x-1/2 w-48 p-2 bg-slate-900 border border-slate-800 text-[10px] text-slate-300 rounded shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
-                    Đi xe máy đến công ty hết bao nhiêu phút.
+                    Ước tính thời gian chạy xe/buýt đến văn phòng.
                   </span>
                 </span>
               </label>
@@ -194,7 +245,7 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400">Giá thuê (VND/tháng) *</label>
+              <label className="text-xs font-medium text-slate-400">Giá thuê gốc (VND/tháng) *</label>
               <input
                 type="number"
                 value={room.giaThue}
@@ -299,7 +350,7 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-400">Độ rộng cảm quan (Hoặc diện tích)</label>
+              <label className="text-xs font-medium text-slate-400">Đo kích thước thô (hoặc diện tích)</label>
               <div className="flex gap-2">
                 {['nho', 'vua', 'lon'].map((opt) => (
                   <label
@@ -339,7 +390,7 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
 
             {/* Độ thoáng (Checkboxes) */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-400">Độ thoáng & Thiết bị trong phòng</label>
+              <label className="text-xs font-medium text-slate-400">Độ thoáng & Thiết bị có sẵn</label>
               <div className="grid grid-cols-2 gap-3 bg-slate-950/30 p-3 rounded-xl border border-slate-900">
                 <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
                   <input
@@ -379,6 +430,20 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Tiện ích phòng trọ (TagSelect) */}
+        <div className="space-y-4 pt-4 border-t border-slate-900">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+            <Sparkles className="w-4 h-4" /> Tiện nghi & Luật lệ phòng trọ
+          </h3>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-slate-400">Chọn các đặc điểm tiện nghi có sẵn của phòng:</label>
+            <TagSelect
+              selectedTags={room.tags}
+              onChange={handleTagsChange}
+            />
           </div>
         </div>
 
@@ -431,8 +496,8 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
         </button>
       </form>
 
-      {/* Cột 3: Live Preview Điểm */}
-      <div className="glass-panel p-6 flex flex-col justify-between h-fit lg:sticky lg:top-6 space-y-6">
+      {/* Cột 3: Live Preview Điểm (7 Trục) */}
+      <div className="glass-panel p-6 flex flex-col justify-between h-fit lg:sticky lg:top-6 space-y-6 col-span-1">
         <div>
           <h2 className="text-lg font-bold flex items-center gap-2 mb-4 border-b border-slate-900 pb-3">
             <Sparkles className="text-indigo-400 w-5 h-5" />
@@ -445,12 +510,12 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
               {scoredRoom.diemTong}
             </span>
             <div className="text-xs text-slate-500 max-w-[200px]">
-              Điểm tổng trung bình có trọng số của 6 tiêu chí chấm điểm
+              Điểm tổng trung bình có trọng số của 7 tiêu chí chấm điểm
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Điểm chi tiết (Thang 1-10)</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 font-sans">Điểm chi tiết (Thang 1-10)</h3>
             <div className="space-y-3">
               {Object.entries(scoredRoom.diemTheoTruc || {}).map(([key, val]) => {
                 const percent = val * 10;
@@ -485,7 +550,7 @@ export default function RoomForm({ config, onSaveRoom, editingRoom, onCancelEdit
               <span className="font-medium text-slate-200">{(Number(room.giaThue) || 0).toLocaleString()}đ</span>
             </div>
             <div className="flex justify-between">
-              <span>Phụ phí hàng tháng (ước tính):</span>
+              <span>Phụ phí hàng tháng:</span>
               <span className="font-medium text-slate-200">
                 {(scoredRoom.tongChiPhiTho - (Number(room.giaThue) || 0)).toLocaleString()}đ
               </span>
