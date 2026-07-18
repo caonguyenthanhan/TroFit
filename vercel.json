@@ -1,0 +1,4 @@
+{
+  "buildCommand": "npm --prefix fe install && npm --prefix fe run build",
+  "outputDirectory": "fe/dist"
+}
