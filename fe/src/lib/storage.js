@@ -30,6 +30,96 @@ const STORAGE_KEYS = {
   PROFILE: 'tro-profile'
 };
 
+import { getSupabaseClient } from './supabase';
+
+// Background sync helpers
+const syncProfileToCloud = async (profile) => {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').upsert({
+        user_id: user.id,
+        data: profile,
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.warn('[Sync] Background profile sync failed', e);
+  }
+};
+
+const syncConfigToCloud = async (config) => {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('configs').upsert({
+        user_id: user.id,
+        data: config,
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.warn('[Sync] Background config sync failed', e);
+  }
+};
+
+const syncRoomToCloud = async (room) => {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('rooms').upsert({
+        id: room.id,
+        user_id: user.id,
+        data: room,
+        updated_at: new Date().toISOString()
+      });
+    }
+  } catch (e) {
+    console.warn('[Sync] Background room sync failed', e);
+  }
+};
+
+const deleteRoomFromCloud = async (id) => {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('rooms').delete().eq('id', id).eq('user_id', user.id);
+    }
+  } catch (e) {
+    console.warn('[Sync] Background room delete failed', e);
+  }
+};
+
+const syncRoomsListToCloud = async (rooms) => {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Upsert all rooms in the list
+      for (const r of rooms) {
+        await supabase.from('rooms').upsert({
+          id: r.id,
+          user_id: user.id,
+          data: r,
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[Sync] Background rooms list sync failed', e);
+  }
+};
+
+
 export const getConfig = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONFIG);
@@ -64,6 +154,7 @@ export const getConfig = () => {
 export const saveConfig = (config) => {
   try {
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(config));
+    syncConfigToCloud(config);
     return true;
   } catch (error) {
     console.error('Error saving config to localStorage', error);
@@ -88,6 +179,7 @@ export const getProfile = () => {
 export const saveProfile = (profile) => {
   try {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+    syncProfileToCloud(profile);
     return true;
   } catch (e) {
     console.error('Error saving profile', e);
@@ -108,6 +200,7 @@ export const getRooms = () => {
 export const saveRoomsList = (rooms) => {
   try {
     localStorage.setItem(STORAGE_KEYS.ROOMS, JSON.stringify(rooms));
+    syncRoomsListToCloud(rooms);
     return true;
   } catch (error) {
     console.error('Error saving rooms list to localStorage', error);
@@ -125,6 +218,8 @@ export const saveRoom = (room) => {
       rooms.push(room);
     }
     saveRoomsList(rooms);
+    // syncRoomToCloud is implicitly called in saveRoomsList, but we also call it directly
+    syncRoomToCloud(room);
     return rooms;
   } catch (error) {
     console.error('Error saving room', error);
@@ -137,6 +232,7 @@ export const deleteRoom = (id) => {
     const rooms = getRooms();
     const filtered = rooms.filter(r => r.id !== id);
     saveRoomsList(filtered);
+    deleteRoomFromCloud(id);
     return filtered;
   } catch (error) {
     console.error('Error deleting room', error);

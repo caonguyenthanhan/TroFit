@@ -5,11 +5,18 @@ import BudgetAdvice from '../components/BudgetAdvice';
 import { getProfile, saveProfile, DEFAULT_PROFILE } from '../lib/storage';
 import { calculateRecommendedBudget } from '../lib/budgetRules';
 import AddressPicker from '../components/AddressPicker';
+import CloudSyncPanel from '../components/CloudSyncPanel';
+
 
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [subTab, setSubTab] = useState('profile'); // profile | cloud
+
+  const handleSyncCompleted = () => {
+    setProfile(getProfile());
+  };
 
   useEffect(() => {
     setProfile(getProfile());
@@ -71,7 +78,32 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Sub tabs navigation */}
+      <div className="flex border-b border-slate-900 gap-2 mb-6">
+        <button
+          type="button"
+          onClick={() => setSubTab('profile')}
+          className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+            subTab === 'profile' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400'
+          }`}
+        >
+          👤 Thiết lập hồ sơ
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('cloud')}
+          className={`px-4 py-2 text-xs font-bold border-b-2 cursor-pointer transition-all ${
+            subTab === 'cloud' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400'
+          }`}
+        >
+          ☁️ Đồng bộ đám mây
+        </button>
+      </div>
+
+      {subTab === 'cloud' ? (
+        <CloudSyncPanel onSyncCompleted={handleSyncCompleted} />
+      ) : (
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Form nhập hồ sơ (Cột 1 & 2) */}
         <div className="lg:col-span-2 glass-panel p-6 md:p-8 space-y-6">
           {/* Tài chính */}
@@ -292,6 +324,7 @@ export default function ProfilePage() {
           </div>
         </div>
       </form>
+      )}
     </div>
   );
 }

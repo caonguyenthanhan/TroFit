@@ -21,11 +21,15 @@ import {
   saveConfig as saveConfigToStorage
 } from './lib/storage';
 import { scoreRoom } from './lib/scoring';
+import { getSupabaseClient } from './lib/supabase';
+
 
 export default function App() {
   const [config, setConfig] = useState(null);
   const [profile, setProfile] = useState(null);
   const [rooms, setRooms] = useState([]);
+
+  const [cloudUser, setCloudUser] = useState(null);
 
   // Initial load of global settings
   useEffect(() => {
@@ -36,6 +40,37 @@ export default function App() {
     setConfig(loadedConfig);
     setProfile(loadedProfile);
     setRooms(loadedRooms.map(r => scoreRoom(r, loadedConfig, loadedProfile)));
+
+    let subscription = null;
+    
+    const setupListener = () => {
+      const supabase = getSupabaseClient();
+      if (supabase && !subscription) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setCloudUser(session?.user || null);
+        });
+        
+        const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+          setCloudUser(session?.user || null);
+          // Reload local cached data
+          const currentConfig = getConfig();
+          const currentProfile = getProfile();
+          const currentRooms = getRooms();
+          setConfig(currentConfig);
+          setProfile(currentProfile);
+          setRooms(currentRooms.map(r => scoreRoom(r, currentConfig, currentProfile)));
+        });
+        subscription = data.subscription;
+      }
+    };
+
+    setupListener();
+    const interval = setInterval(setupListener, 1500); // Check for config update periodically
+
+    return () => {
+      clearInterval(interval);
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   const handleSaveConfig = (newConfig) => {
@@ -96,6 +131,26 @@ export default function App() {
               <p className="text-slate-400 text-sm mt-1.5 leading-relaxed max-w-2xl">
                 Tìm phòng trọ khớp với bạn, không chỉ khớp với ví tiền. Cá nhân hóa việc chấm điểm và so sánh phòng trọ bằng dữ liệu khoa học.
               </p>
+            </div>
+
+            {/* Trạng thái Đồng Bộ Đám Mây */}
+            <div className="flex items-center gap-2 text-xs">
+              {cloudUser ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/5 text-emerald-400 font-semibold shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  ☁️ Đã đồng bộ ({cloudUser.email})
+                </div>
+              ) : getSupabaseClient() ? (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/25 bg-amber-500/5 text-amber-400 font-semibold shadow-sm">
+                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                  💾 Chế độ Local (Chưa đăng nhập)
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900/40 text-slate-400 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                  🌐 Lưu Trữ Trình Duyệt (Ngoại tuyến)
+                </div>
+              )}
             </div>
           </header>
 
