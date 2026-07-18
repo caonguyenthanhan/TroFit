@@ -18,8 +18,9 @@ import CompareChart from '../components/CompareChart';
 import CompareTable from '../components/CompareTable';
 import PromptHelper from '../components/PromptHelper';
 import { getRooms, getConfig, getProfile, deleteRoom, saveRoomsList, saveConfig, saveProfile } from '../lib/storage';
-import { scoreRoom, analyzeSensitivity } from '../lib/scoring';
+import { scoreRoom, analyzeSensitivity, calculateCommuteOpportunityCost } from '../lib/scoring';
 import { checkBudgetExtensionConditions } from '../lib/budgetRules';
+
 import MapView from '../components/MapView';
 
 
@@ -377,6 +378,11 @@ export default function ComparePage() {
                               </span>
                             )}
                           </div>
+                          {room.thoiGianDenCongTy && profile?.thuNhap > 0 && (
+                            <div className="text-[9px] text-slate-500 mt-1 font-semibold">
+                              CP thời gian: ≈ {calculateCommuteOpportunityCost(room.thoiGianDenCongTy, profile.thuNhap).toLocaleString()}đ
+                            </div>
+                          )}
                           {/* Badges warning */}
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {room.thieuBatBuoc && (

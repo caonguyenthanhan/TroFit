@@ -1,18 +1,15 @@
 import React from 'react';
 import { Calendar, MapPin, Check, X, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { getTags } from '../lib/tags';
+import { calculateCommuteOpportunityCost } from '../lib/scoring';
+
 
 export default function CompareTable({ selectedRooms, profile }) {
   if (!selectedRooms || selectedRooms.length === 0) {
     return null;
   }
 
-  const calculateTimeCost = (commuteTime) => {
-    const income = Number(profile?.thuNhap || 0);
-    if (!commuteTime || !income) return 0;
-    // (minutes / 60) * (income / 176) * 22 days * 2 trips
-    return (Number(commuteTime) / 60) * (income / 176) * 22 * 2;
-  };
+
 
   const allAvailableTags = getTags();
   const getTagName = (id) => allAvailableTags.find(t => t.id === id)?.label || id;
@@ -137,16 +134,16 @@ export default function CompareTable({ selectedRooms, profile }) {
               <tr className="hover:bg-slate-900/20">
                 <td className="p-3 text-slate-400">
                   <span className="flex flex-col">
-                    <span>CP cơ hội thời gian đi lại</span>
+                    <span>Chi phí thời gian (quy đổi)</span>
                     <span className="text-[9px] text-slate-500 font-normal">CP cơ hội = (Phút / 60) * (Thu nhập / 176) * 22 ngày * 2 lượt</span>
                   </span>
                 </td>
                 {selectedRooms.map((room) => {
-                  const timeCost = calculateTimeCost(room.thoiGianDenCongTy);
+                  const timeCost = calculateCommuteOpportunityCost(room.thoiGianDenCongTy, profile.thuNhap);
                   return (
                     <td key={room.id} className="p-3 text-slate-300">
                       <div className="font-semibold text-slate-400">
-                        {formatCost(Math.round(timeCost))}
+                        {formatCost(timeCost)}
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5">
                         ({room.thoiGianDenCongTy || 0} phút đi lại)
@@ -162,11 +159,11 @@ export default function CompareTable({ selectedRooms, profile }) {
               <tr className="hover:bg-slate-900/20 bg-indigo-500/5">
                 <td className="p-3 text-indigo-300 font-semibold">Tổng chi phí quy đổi (Trọ + CP Thời gian)</td>
                 {selectedRooms.map((room) => {
-                  const timeCost = calculateTimeCost(room.thoiGianDenCongTy);
+                  const timeCost = calculateCommuteOpportunityCost(room.thoiGianDenCongTy, profile.thuNhap);
                   const totalConvertedCost = room.tongChiPhiTho + timeCost;
                   return (
                     <td key={room.id} className="p-3 font-extrabold text-indigo-300 text-sm">
-                      {formatCost(Math.round(totalConvertedCost))}
+                      {formatCost(totalConvertedCost)}
                     </td>
                   );
                 })}

@@ -230,3 +230,10 @@ export const analyzeSensitivity = (roomsList, config, profile) => {
   
   return { isSensitive, changedBestRoomName };
 };
+
+export const calculateCommuteOpportunityCost = (thoiGianDenCongTyPhut, thuNhap) => {
+  if (!thoiGianDenCongTyPhut || !thuNhap) return 0;
+  const luongTheoGio = Number(thuNhap) / 176; // 176 = giờ công chuẩn/tháng (22 ngày x 8h)
+  const gioDiChuyenThangDoi = (Number(thoiGianDenCongTyPhut) * 2 * 22) / 60; // *2 vì đi + về, 22 ngày công/tháng
+  return Math.round(gioDiChuyenThangDoi * luongTheoGio);
+};
