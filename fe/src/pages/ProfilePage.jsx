@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Save, RotateCcw, Sparkles, DollarSign, MapPin, Briefcase, Users, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { User, Save, RotateCcw, Sparkles, DollarSign, MapPin, Briefcase, Users, HelpCircle, CheckCircle2, Landmark } from 'lucide-react';
 import TagSelect from '../components/TagSelect';
 import BudgetAdvice from '../components/BudgetAdvice';
 import { getProfile, saveProfile, DEFAULT_PROFILE } from '../lib/storage';
