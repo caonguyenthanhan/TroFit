@@ -29,6 +29,7 @@ TroFit không chỉ là một bảng nhập liệu thông thường, ứng dụn
 - 🗺️ **Bản đồ trực quan (Map View):** Hiển thị vị trí văn phòng/công ty và các phòng trọ được chọn so sánh trên bản đồ tối (Dark Map). Vẽ đường nét đứt (polyline) nối công ty với phòng trọ và hiển thị trực tiếp điểm số phòng trên marker.
 - 📍 **Định vị & Tính thời gian di chuyển tự động:** Chuyển đổi địa chỉ sang tọa độ và tự động tính toán thời gian đi lại thông qua Mapbox APIs (có cache tiết kiệm quota, fallback OpenStreetMap Nominatim miễn phí). Hỗ trợ kéo-thả marker ghim vị trí chính xác nếu geocode bị lệch.
 - 💰 **CP cơ hội thời gian quy đổi:** Tính toán chính xác chi phí thời gian di chuyển hàng tháng quy đổi thành tiền dựa trên thu nhập, giúp đánh giá thực chất giá trị kinh tế của phòng ở xa giá rẻ so với ở gần giá đắt.
+- ☁️ **Đồng bộ đám mây Supabase (Tùy chọn):** Sao lưu và đồng bộ hóa dữ liệu trọ cá nhân đa thiết bị. Tự động merge dữ liệu offline từ localStorage lên Cloud khi đăng nhập lần đầu (sử dụng RLS bảo mật ở mức hàng dữ liệu - Row Level Security).
 - ⚡ **Chấm điểm Live Preview:** Điểm số tổng và điểm 7 trục thành phần được tính toán động và hiển thị ngay lập tức khi bạn thay đổi các giá trị đầu vào.
 - 📊 **So sánh biểu đồ Radar:** So sánh trực quan điểm mạnh/yếu của tối đa 5 phòng cùng lúc trên biểu đồ Spider (Radar) nhiều lớp màu.
 - 📋 **Bảng đối chiếu thông số thô:** Bảng so sánh chi tiết giúp đối chiếu các khoản phụ phí thô (tiền điện, nước, dịch vụ...) kèm cảnh báo độ nhạy xếp hạng (Sensitivity Analysis) khi trọng số thay đổi $\pm 10\%$.
@@ -42,6 +43,7 @@ TroFit không chỉ là một bảng nhập liệu thông thường, ứng dụn
 | :--- | :--- | :--- |
 | **Frontend Framework** | React 19 + Vite 8 | Tối ưu hóa hiệu năng render, khởi động nhanh chóng |
 | **Routing** | React Router DOM | Quản lý điều hướng 3 trang chức năng mượt mà |
+| **Database & Auth** | Supabase (SaaS Client) | Hỗ trợ đăng ký/đăng nhập & cơ sở dữ liệu đám mây JSONB với bảo mật RLS |
 | **Styling (CSS)** | TailwindCSS v4 | Giao diện tối màu (dark theme) hiện đại, bo góc mềm mại, glassmorphic |
 | **Mapping & Tiles** | Leaflet + React-Leaflet | Hiển thị bản đồ vị trí, polyline và kéo-thả marker ghim tọa độ |
 | **APIs tích hợp** | Mapbox (Geocoding & Directions) | Chuyển địa chỉ sang tọa độ và tính thời gian di chuyển (fallback Nominatim) |
@@ -62,18 +64,23 @@ TroFit không chỉ là một bảng nhập liệu thông thường, ứng dụn
    ```
 
 2. **Cấu hình biến môi trường:**
-   - Sao chép file `.env.example` ở thư mục gốc thành `.env` (hoặc copy sang `fe/.env`).
+   - Sao chép file `.env.example` ở thư mục gốc thành `.env` (hoặc copy vào `fe/.env`).
    - Điền Mapbox Access Token của bạn vào biến `VITE_MAPBOX_TOKEN`.
    - *Lưu ý:* Nếu không điền token, ứng dụng sẽ tự động fallback sang OpenStreetMap Nominatim (miễn phí, không cần key) để tìm tọa độ nhưng độ chính xác địa chỉ hẻm/ngõ tại Việt Nam sẽ thấp hơn và thời gian di chuyển sẽ được ước tính theo công thức Haversine.
 
-3. **Cài đặt thư viện & khởi chạy:**
+3. **Cấu hình đồng bộ đám mây Supabase (Tùy chọn):**
+   - Bạn có thể điền các biến `VITE_SUPABASE_URL` và `VITE_SUPABASE_ANON_KEY` trong file `.env` hoặc điền trực tiếp từ giao diện **Hồ sơ cá nhân > Tab Đồng bộ đám mây** của app.
+   - Để database Supabase hoạt động, hãy copy đoạn script SQL khởi tạo bảng (được cung cấp sẵn trên giao diện Đồng bộ đám mây) dán vào **SQL Editor** trong trang quản trị Supabase và bấm **Run**.
+   - **⚠️ CẢNH BÁO BẢO TRÌ FREE-TIER SUPABASE:** Các dự án Supabase thuộc gói miễn phí (Free Tier) sẽ **tự động tạm dừng (pause) sau 7 ngày không có hoạt động**. Khi đó lần đăng nhập đầu tiên sau thời gian dài có thể bị lỗi, bạn chỉ cần đăng nhập vào dashboard Supabase và bấm **Resume** để đánh thức lại database.
+
+4. **Cài đặt thư viện & khởi chạy:**
    ```bash
    cd fe
    npm install
    npm run dev
    ```
 
-Sau khi khởi chạy, truy cập đường dẫn mặc định [http://localhost:5173](http://localhost:5173) trên trình duyệt. Bạn cũng có thể nhúng đúp trực tiếp vào tệp `scripts/run_fe_dev.bat` để chạy nhanh ứng dụng trên hệ điều hành Windows.
+Sau khi khởi chạy, truy cập đường dẫn mặc định [http://localhost:5173](http://localhost:5173) trên trình duyệt. Bạn cũng có thể nhấp đúp trực tiếp vào tệp `scripts/run_fe_dev.bat` để chạy nhanh ứng dụng trên hệ điều hành Windows.
 
 ---
 
@@ -88,26 +95,29 @@ TroFit/
   │    ├── src/
   │    │    ├── assets/           # CSS tĩnh, hình ảnh nội bộ
   │    │    ├── components/       # Các components giao diện (Form, Chart, Table...)
-  │    │    │    ├── AddressPicker.jsx   # [NEW] Bản đồ kéo-thả ghim tọa độ
-  │    │    │    ├── MapView.jsx         # [NEW] Bản đồ so sánh đa điểm phòng trọ
-  │    │    │    ├── TagSelect.jsx       # [NEW] UI chọn chip tiện nghi
-  │    │    │    ├── BudgetAdvice.jsx    # [NEW] Chỉ báo ngân sách tài chính
+  │    │    │    ├── AddressPicker.jsx   # Bản đồ kéo-thả ghim tọa độ
+  │    │    │    ├── MapView.jsx         # Bản đồ so sánh đa điểm phòng trọ
+  │    │    │    ├── TagSelect.jsx       # UI chọn chip tiện nghi
+  │    │    │    ├── BudgetAdvice.jsx    # Chỉ báo ngân sách tài chính
+  │    │    │    ├── CloudSyncPanel.jsx  # [NEW] UI Đăng ký, đăng nhập & SQL script mẫu
   │    │    │    ├── ConfigSettings.jsx  # Cấu hình locked-sum sliders
   │    │    │    ├── RoomForm.jsx        # Nhập liệu phòng kèm live-preview
   │    │    │    ├── CompareChart.jsx    # Biểu đồ Radar 7 trục
   │    │    │    ├── CompareTable.jsx    # Bảng đối chiếu CP thời gian & phụ phí
   │    │    │    └── PromptHelper.jsx    # Sinh prompt dán AI kèm JSON
   │    │    ├── lib/              # Logic tiện ích cốt lõi (storage, scoring)
-  │    │    │    ├── storage.js          # CRUD localStorage & default configs
+  │    │    │    ├── storage.js          # CRUD localStorage & dual-writes
   │    │    │    ├── scoring.js          # Chấm điểm 7 trục & phân tích độ nhạy
-  │    │    │    ├── budgetRules.js      # [NEW] Quy tắc 50/30/20 & nới trần
-  │    │    │    ├── geocoding.js        # [NEW] API geocoding Mapbox/OSM
-  │    │    │    ├── directions.js       # [NEW] API tính thời gian di chuyển
-  │    │    │    ├── weightBalancer.js   # [NEW] Thuật toán locked-sum
-  │    │    │    ├── colorScale.js       # [NEW] Phối màu điểm số thống nhất
-  │    │    │    └── tests.js            # [NEW] Bộ test runner tự động trong console
+  │    │    │    ├── budgetRules.js      # Quy tắc 50/30/20 & nới trần
+  │    │    │    ├── geocoding.js        # API geocoding Mapbox/OSM
+  │    │    │    ├── directions.js       # API tính thời gian di chuyển
+  │    │    │    ├── weightBalancer.js   # Thuật toán locked-sum
+  │    │    │    ├── colorScale.js       # Phối màu điểm số thống nhất
+  │    │    │    ├── supabase.js         # [NEW] Khởi tạo dynamic Supabase client
+  │    │    │    ├── sync.js             # [NEW] Logic Auth & Merge/Sync dữ liệu
+  │    │    │    └── tests.js            # Bộ test runner tự động trong console
   │    │    ├── pages/            # Các trang view chính (React Router)
-  │    │    │    ├── ProfilePage.jsx     # Quản lý hồ sơ tài chính & công ty
+  │    │    │    ├── ProfilePage.jsx     # Quản lý hồ sơ tài chính & công ty & Cloud sync tabs
   │    │    │    ├── RoomFormPage.jsx    # Quản lý form nhập và live-preview
   │    │    │    └── ComparePage.jsx     # Bảng điều khiển so sánh & map/radar toggle
   │    │    ├── App.jsx           # Định tuyến Router & layout chính
@@ -115,10 +125,10 @@ TroFit/
   │    │    └── main.jsx          # Entrypoint của React & Kích hoạt test runner
   │    ├── package.json
   │    ├── vite.config.js
-  │    └── .env.example           # [NEW] File hướng dẫn cấu hình Mapbox Token
+  │    └── .env.example           # File hướng dẫn cấu hình Mapbox Token
   ├── scripts/                    # Scripts vận hành nhanh trên Windows
   │    └── run_fe_dev.bat         # Script kích hoạt nhanh dev server
-  ├── .env.example                # [NEW] Hướng dẫn cấu hình Mapbox Token ở thư mục gốc
+  ├── .env.example                # Hướng dẫn cấu hình Mapbox Token ở thư mục gốc
   └── README.md                   # Tài liệu giới thiệu dự án
 ```
 
@@ -148,6 +158,7 @@ $$\text{Điểm Tổng} = \sum_{i=1}^{7} (\text{Điểm Tiêu Chí}_i \times \te
 
 - [x] Tích hợp Google Maps/Mapbox API để tự động tính toán chính xác thời gian di chuyển.
 - [x] Phân tích độ nhạy (Sensitivity Analysis) nâng cao nhằm chỉ ra các trục điểm đang quyết định sự chênh lệch lớn giữa các lựa chọn.
+- [x] Tích hợp đồng bộ đám mây lưu trữ dữ liệu cá nhân (Supabase + RLS bảo mật).
 - [ ] Cho phép upload hình ảnh thực tế phòng trọ và lưu trữ dưới dạng Base64 hoặc IndexedDB.
 - [ ] Nhúng trực tiếp API của OpenAI/Claude vào ứng dụng để nhận phân tích/tư vấn AI ngay trong UI thay vì copy JSON.
 - [ ] Chia sẻ nhanh link so sánh phòng trọ bằng cách mã hóa trạng thái (encode state) vào URL.
