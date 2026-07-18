@@ -1,0 +1,33 @@
+# Dependency directories
+node_modules/
+fe/node_modules/
+
+# Build outputs
+dist/
+fe/dist/
+dist-ssr/
+fe/dist-ssr/
+
+# Logs
+*.log
+logs/
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Context packages
+repomix-context.xml
